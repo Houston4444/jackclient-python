@@ -1558,7 +1558,8 @@ class Client:
     def get_ports(self, name_pattern='',
                   is_audio=False, is_midi=False, is_unknown=False,
                   is_input=False, is_output=False, is_physical=False,
-                  can_monitor=False, is_terminal=False):
+                  can_monitor=False, is_terminal=False,
+                  type_pat=''):
         """Return a list of selected ports.
 
         Parameters
@@ -1579,20 +1580,23 @@ class Client:
             All ports that satisfy the given conditions.
 
         """
-        if is_unknown:
-            # sadly JACK uses regcomp which can not support lookaheads
-            # to exclude a string.
-            # So if is_unknown is True, all port types will match
-            type_pattern = b''
-        elif is_audio and is_midi:
-            # pattern will match with audio and midi (but not other types)
-            type_pattern = f'({_AUDIO.decode()}|{_MIDI.decode()})'.encode()
-        elif is_audio:
-            type_pattern = _AUDIO
-        elif is_midi:
-            type_pattern = _MIDI
+        if type_pat:
+            type_pattern = type_pat.encode()
         else:
-            type_pattern = b''
+            if is_unknown:
+                # sadly JACK uses regcomp which can not support lookaheads
+                # to exclude a string.
+                # So if is_unknown is True, all port types will match
+                type_pattern = b''
+            elif is_audio and is_midi:
+                # pattern will match with audio and midi (but not other types)
+                type_pattern = f'({_AUDIO.decode()}|{_MIDI.decode()})'.encode()
+            elif is_audio:
+                type_pattern = _AUDIO
+            elif is_midi:
+                type_pattern = _MIDI
+            else:
+                type_pattern = b''
 
         flags = 0x0
         if is_input:
