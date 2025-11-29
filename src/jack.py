@@ -2391,7 +2391,7 @@ class Ports:
 
         """
         port = self._client._register_port(
-            shortname, b'8 bit raw middle', is_terminal, is_physical, self._flag)
+            shortname, b'32 bit float RGBA video', is_terminal, is_physical, self._flag)
         self._portlist.append(port)
         return port
 
