@@ -1555,7 +1555,8 @@ class Client:
                         _lib.jack_free)
         return self._port_list_from_pointers(names)
 
-    def get_ports(self, name_pattern='', is_audio=False, is_midi=False,
+    def get_ports(self, name_pattern='',
+                  is_audio=False, is_midi=False, is_unknown=False,
                   is_input=False, is_output=False, is_physical=False,
                   can_monitor=False, is_terminal=False):
         """Return a list of selected ports.
@@ -1578,12 +1579,21 @@ class Client:
             All ports that satisfy the given conditions.
 
         """
-        if is_audio and not is_midi:
+        if is_unknown:
+            # sadly JACK uses regcomp which can not support lookaheads
+            # to exclude a string.
+            # So if is_unknown is True, all port types will match
+            type_pattern = b''
+        elif is_audio and is_midi:
+            # pattern will match with audio and midi (but not other types)
+            type_pattern = f'({_AUDIO.decode()}|{_MIDI.decode()})'.encode()
+        elif is_audio:
             type_pattern = _AUDIO
-        elif is_midi and not is_audio:
+        elif is_midi:
             type_pattern = _MIDI
         else:
             type_pattern = b''
+
         flags = 0x0
         if is_input:
             flags |= _lib.JackPortIsInput
@@ -1759,6 +1769,7 @@ class Client:
             flags |= _lib.JackPortIsPhysical
         port_ptr = _lib.jack_port_register(self._ptr, name.encode(), porttype,
                                            flags, 0)
+        print('go for porttype', porttype)
         if not port_ptr:
             raise JackError(
                 f'{name!r}: port registration failed')
@@ -1793,7 +1804,7 @@ class Client:
         elif porttype == _MIDI:
             cls = OwnMidiPort if self.owns(ptr) else MidiPort
         else:
-            assert False
+            cls = UnknownPort
         return cls(ptr, self)
 
 
@@ -1837,6 +1848,11 @@ class Port:
     def __ne__(self, other):
         """This should be implemented whenever __eq__() is implemented."""
         return not self.__eq__(other)
+
+    @property
+    def type(self):
+        """Name of the JACK port type (read-only)."""
+        return _decode(_lib.jack_port_type(self._ptr))
 
     @property
     def name(self):
@@ -1970,6 +1986,17 @@ class MidiPort(Port):
 
     is_audio = property(lambda self: False, doc='This is always ``False``.')
     is_midi = property(lambda self: True, doc='This is always ``True``.')
+
+
+class UnknownPort(Port):
+    """A JACK port with an unknown type
+    
+    This class is derived from `Port` and has exactly the same
+    attributes and methods.
+    """
+
+    is_audio = property(lambda self: False, doc='This is always ``False``.')
+    is_midi = property(lambda self: False, doc='This is always ``False``.')
 
 
 class OwnPort(Port):
@@ -2360,7 +2387,7 @@ class Ports:
 
         """
         port = self._client._register_port(
-            shortname, self._type, is_terminal, is_physical, self._flag)
+            shortname, b'8 bit raw middle', is_terminal, is_physical, self._flag)
         self._portlist.append(port)
         return port
 
